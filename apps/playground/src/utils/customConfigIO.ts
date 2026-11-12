@@ -36,6 +36,65 @@ export const downloadCustomConfig = (config: TCustomConfigFile) => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const validateCustomChainEntry = (name: string, entry: unknown): void => {
+  if (!isRecord(entry)) {
+    throw new Error(`Invalid customChain entry for "${name}". Must be an object.`);
+  }
+
+  const { input, assetsInfo } = entry;
+  if (!isRecord(input)) {
+    throw new Error(`Invalid customChain entry for "${name}". "input" must be an object.`);
+  }
+
+  if (!isRecord(assetsInfo)) {
+    throw new Error(`Invalid customChain entry for "${name}". "assetsInfo" must be an object.`);
+  }
+
+  if (!Array.isArray(assetsInfo.assets)) {
+    throw new Error(`Invalid customChain entry for "${name}". "assetsInfo.assets" must be an array.`);
+  }
+};
+
+const validateCustomAssetEntry = (
+  chain: string,
+  asset: unknown,
+  index: number,
+): void => {
+  if (!isRecord(asset)) {
+    throw new Error(
+      `Invalid asset in "customAssets.${chain}[${index}]". Must be an object.`,
+    );
+  }
+
+  if (typeof asset.symbol !== 'string' || asset.symbol.trim() === '') {
+    throw new Error(
+      `Invalid asset in "customAssets.${chain}[${index}]". "symbol" must be a non-empty string.`,
+    );
+  }
+
+  if (
+    typeof asset.decimals !== 'number' ||
+    !Number.isInteger(asset.decimals) ||
+    asset.decimals < 0
+  ) {
+    throw new Error(
+      `Invalid asset in "customAssets.${chain}[${index}]". "decimals" must be a non-negative integer.`,
+    );
+  }
+
+  if (!isRecord(asset.location)) {
+    throw new Error(
+      `Invalid asset in "customAssets.${chain}[${index}]". "location" must be an object.`,
+    );
+  }
+
+  if (typeof asset.existentialDeposit !== 'string') {
+    throw new Error(
+      `Invalid asset in "customAssets.${chain}[${index}]". "existentialDeposit" must be a string.`,
+    );
+  }
+};
+
 export const parseCustomConfig = (text: string): TCustomConfigFile => {
   let parsed: unknown;
   try {
@@ -62,6 +121,21 @@ export const parseCustomConfig = (text: string): TCustomConfigFile => {
     throw new Error(
       'Config must contain "customChains" and/or "customAssets".',
     );
+  }
+
+  if (customChains !== undefined) {
+    for (const [name, entry] of Object.entries(customChains)) {
+      validateCustomChainEntry(name, entry);
+    }
+  }
+
+  if (customAssets !== undefined) {
+    for (const [chain, list] of Object.entries(customAssets)) {
+      if (!Array.isArray(list)) {
+        throw new Error(`"customAssets" for "${chain}" must be an array.`);
+      }
+      list.forEach((asset, idx) => validateCustomAssetEntry(chain, asset, idx));
+    }
   }
 
   return {
